@@ -69,7 +69,7 @@ If you plan to install custom firmware afterwards on a UC25HQ80, check that its 
 | Date | Chip | From | To | macOS | Result |
 |---|---|---|---|---|---|
 | 2026-11-03 | UC25HQ80 | Black screen (custom boot area and SLOOP 2.8.4) | V15 and M-VAVE's bootloader | Apple silicon | Starts; flash verified (with the script this tool grew from) |
-| 2026-11-03 | UC25HQ80 | Custom firmware on M-VAVE's V15 boot area | V16 and its bootloader (169 sectors), then back to the full earlier backup (199 sectors) | Apple silicon | V16 starts and switches to download mode on request; the way back verified byte for byte |
+| 2026-11-03 | UC25HQ80 | Custom firmware on M-VAVE's V15 boot area | V16 and its bootloader (169 sectors), then back to the full earlier backup (199 sectors) | Apple silicon | V16 starts and switches to download mode on request; the way back verified byte for byte, and the earlier firmware starts with its saves |
 
 ## Hardware checks of releases
 

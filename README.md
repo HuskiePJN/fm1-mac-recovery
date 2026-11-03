@@ -138,7 +138,7 @@ Backup      backups/fm1-YYYYMMDD-HHMMSS.bin
 It ends with the exact command for step 5. Copy the `backups` folder somewhere safe, such as an external drive.
 
 > [!NOTE]
-> **Flash chip note.** FM-1s use one of two 1 MB flash chips: `0x856014` (Puya P25Q80H) or `0xB36014` (UCUN UC25HQ80, in the 2026 units with the logo on the front). The UC25HQ80 was recovered with this tool; the Puya is read by the same loader and expected to work. The tool uses JieLi's own loader because, on a UC25HQ80 after m-bootloader, M-Flasher's loader read only blank data. Any other chip key or flash size stops the tool before it touches anything.
+> **Flash chip note.** FM-1s use one of two 1 MB flash chips: `0x856014` (Puya P25Q80H) or `0xB36014` (UCUN UC25HQ80, in the 2026 units with the logo on the front). The UC25HQ80 was recovered with this tool; the Puya is read by the same loader and expected to work. The tool uses JieLi's own loader because, on a UC25HQ80 after m-bootloader, M-Flasher's loader read only blank data. Any other chip key or flash size stops the tool before it touches anything. Why the chip matters for custom firmware and other tools: [Firmware and chips](docs/firmware-and-chips.md#why-it-matters).
 
 ## Step 5. Build the recovery image
 

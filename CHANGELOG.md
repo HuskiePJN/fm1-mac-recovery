@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Docs: the two flash chips, how to tell which one you have, what differs and why it matters.
+
 ## 1.0.0 (2026-11-03)
 
 First public release.

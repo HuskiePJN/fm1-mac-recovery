@@ -27,6 +27,34 @@ M-VAVE's site offers only the newest version. This repository never includes the
 
 Any other 1 MiB chip is reported as unknown. Backups still work; writing needs `--allow-untested`. A chip that isn't 1 MiB, or a chip key other than `0x980F`, stops the tool.
 
+### Which chip is in my FM-1?
+
+Run `sudo .venv/bin/python fm1_recover.py probe` with the FM-1 in download mode. It reads nothing from the flash and prints the chip on the `Chip key` line, for example `flash 0xB36014 (UCUN UC25HQ80, tested)`. As a rough guide, the 2026 units with the M-VAVE logo on the front have the UC25HQ80.
+
+### What differs between the two
+
+They are interchangeable 8 Mbit (1 MiB) SPI flash chips: same memory type, same size, 4 KiB sectors and 256-byte pages. The difference that matters is the **ID** they report. The JEDEC ID is three bytes, maker, memory type and size, and only the maker byte differs:
+
+| | Maker | Memory type | Size |
+|---|---|---|---|
+| Puya P25Q80H | `0x85` | `0x60` | `0x14` (1 MiB) |
+| UCUN UC25HQ80 | `0xB3` | `0x60` | `0x14` (1 MiB) |
+
+M-VAVE's own firmware (V15 and V16) runs and saves its settings on both.
+
+### Why it matters
+
+Some FM-1 software was written when only the Puya chip was known. It checks the ID, and on a UC25HQ80 it either refuses or behaves differently. At the time of writing (November 2026):
+
+- **Custom firmware may not save.** Felucca 1.8.0 and SLOOP 2.8.4 accept only `0x856014` for saving. On a UC25HQ80 they run, but everything you save is gone at power-off ([Felucca #319](https://github.com/hugelton/Felucca/issues/319), [SLOOP #238](https://github.com/isod89/sloop-fm1/issues/238)). Some of their installers also stop on these units ([SLOOP #228](https://github.com/isod89/sloop-fm1/issues/228)).
+- **Other recovery tools may refuse the unit.** MvaveFM1Unbricker accepted `0xB36014` from version 1.2.1; its Transporter script still accepts only `0x856014`.
+- **M-Flasher's loader** read only blank data from a UC25HQ80 after m-bootloader had been installed. JieLi's own loader, which this tool always uses, reads and writes it normally.
+- **Boot areas from custom packages.** On the UC25HQ80 unit this tool was tested on, a custom package's own boot area led to the black screen. The same firmware ran fine on M-VAVE's boot area.
+
+For this tool, the steps are the same on both chips. It reads, erases and writes with the loader's standard commands, never relies on chip-specific features, and verifies every sector by reading it back. The chip only changes what the `Chip key` line says, and whether a write needs `--allow-untested` (it never does for these two).
+
+If you plan to install custom firmware afterwards on a UC25HQ80, check that its release notes mention `0xB36014` or the UC25HQ80, take a full backup first, and prefer an installer that keeps M-VAVE's boot area.
+
 ## Bootloaders seen on FM-1s
 
 | Boot area | How to reach download mode | Notes |

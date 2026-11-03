@@ -1,0 +1,42 @@
+name: Recovery report
+description: Tell us how a recovery went, so the firmware and chip tables can be updated.
+labels: [report]
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you. Please never attach a backup file: it holds your unit's own data."
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options: ["The FM-1 starts again", "It did not work"]
+    validations: {required: true}
+  - type: input
+    id: chip
+    attributes:
+      label: The "Chip key" line from step 4
+      placeholder: "Chip key    0x980F   flash 0xB36014 (UCUN UC25HQ80, tested)"
+    validations: {required: true}
+  - type: input
+    id: package
+    attributes:
+      label: The "Package" line from step 5
+      placeholder: "Package     FM-1_015, flash.bin 0x93000 bytes: official V15 (tested)"
+  - type: input
+    id: before
+    attributes:
+      label: What was on the FM-1 before (firmware, bootloader) and how it went wrong
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and macOS version
+      placeholder: "MacBook Air M2, macOS 26.1"
+  - type: input
+    id: version
+    attributes:
+      label: Tool version (fm1_recover.py --version)
+  - type: textarea
+    id: output
+    attributes:
+      label: Terminal output of the step that failed (if any)
+      render: text

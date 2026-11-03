@@ -1,0 +1,19 @@
+name: Offline tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests (no FM-1 needed)
+        run: python3 -m unittest discover -s tests -v
+      - name: Syntax of the Python and Swift files
+        run: |
+          python3 -m py_compile fm1_recover.py
+          swiftc -parse dlmode.swift
+      - name: Setup script
+        run: sh -n setup.sh

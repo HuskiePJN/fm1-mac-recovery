@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Windows or Linux
+    url: https://github.com/Quixotic7/MvaveFM1Unbricker
+    about: This tool is for macOS. On Windows and Linux, use MvaveFM1Unbricker.

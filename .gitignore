@@ -1,0 +1,7 @@
+# Your FM-1's data and M-VAVE's firmware never go into the repository.
+backups/
+*.bin
+*.fwsc
+.venv/
+__pycache__/
+.DS_Store

@@ -26,7 +26,7 @@ import time
 import zlib
 from pathlib import Path
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 HERE = Path(__file__).resolve().parent
 VID, PID = 0x4C4A, 0x8057       # JieLi ROM download mode
@@ -43,7 +43,7 @@ LOADER = (0x01C02000, "wl82loader.bin", "d41da6126760c9d66660bcc0cac8d27d221806c
 FIRMWARE = {
     "FM-1_015": ("V15", 0x93000, "6edf3c37fb5bbbc33607c89375ee024d5477c17914d72221c8c68e58a8255686", True,
                  "restores M-VAVE's bootloader (boot area sha256 d9f431917776...)"),
-    "FM-1_016": ("V16", 0xA9000, "c47d8895963c070f9334efd6a617d7aae5daf8480ffcf3438ffb634c03de8ef7", False,
+    "FM-1_016": ("V16", 0xA9000, "c47d8895963c070f9334efd6a617d7aae5daf8480ffcf3438ffb634c03de8ef7", True,
                  "has its own new bootloader (8f5228c2d6ea...) and a larger firmware, to 0xA8FFF"),
 }
 # Flash chips: JEDEC ID -> name, status. "tested": recovered with this tool. "expected": used in FM-1s

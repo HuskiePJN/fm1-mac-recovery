@@ -7,7 +7,7 @@ What the tool knows, and how well each one has been tested. "Tested" means an FM
 | Package | Identity | `flash.bin` | Boot area (first bytes of its SHA-256) | Status |
 |---|---|---|---|---|
 | V15 | `FM-1_015` | `0x93000` bytes | `d9f431917776` (M-VAVE's bootloader) | **Tested** |
-| V16 | `FM-1_016` | `0xA9000` bytes | `8f5228c2d6ea` (a new bootloader) | **Recognised, not yet tested**, needs `--allow-untested` |
+| V16 | `FM-1_016` | `0xA9000` bytes | `8f5228c2d6ea` (a new bootloader) | **Tested** |
 
 The tool checks the SHA-256 of `flash.bin` from `0x4000` to its end:
 
@@ -60,7 +60,7 @@ If you plan to install custom firmware afterwards on a UC25HQ80, check that its 
 | Boot area | How to reach download mode | Notes |
 |---|---|---|
 | M-VAVE's (V15) | From the running firmware (SysEx); no key | Restored by a V15 recovery |
-| M-VAVE's (V16) | Not yet known | Comes with V16 |
+| M-VAVE's (V16) | From the running firmware (SysEx); no key | Written and started with this tool; V16 sets up its settings in `0xC2000`–`0xFBFFF` on its first start |
 | [m-bootloader](https://github.com/jvitkauskas/m-bootloader) | Hold REC at power-on | Replaced by a recovery |
 | Generic JieLi SDK boot area from some custom packages | ROM fallback only | On a UC25HQ80 unit this gave a black screen |
 
@@ -69,9 +69,11 @@ If you plan to install custom firmware afterwards on a UC25HQ80, check that its 
 | Date | Chip | From | To | macOS | Result |
 |---|---|---|---|---|---|
 | 2026-11-03 | UC25HQ80 | Black screen (custom boot area and SLOOP 2.8.4) | V15 and M-VAVE's bootloader | Apple silicon | Starts; flash verified (with the script this tool grew from) |
+| 2026-11-03 | UC25HQ80 | Custom firmware on M-VAVE's V15 boot area | V16 and its bootloader (169 sectors), then back to the full earlier backup (199 sectors) | Apple silicon | V16 starts and switches to download mode on request; the way back verified byte for byte |
 
 ## Hardware checks of releases
 
 | Version | Chip | Check |
 |---|---|---|
 | 1.0.0 | UC25HQ80 | Backup (two reads, identical); a one-sector write and verify outside the firmware, then back; a restore correctly refused when the running firmware had saved between runs |
+| 1.1.0 | UC25HQ80 | V16 written with its boot area and started; `probe` from V16; a full restore of an earlier backup, boot area included |

@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-11-03)
 
+- **V16 is tested.** An FM-1 was taken to V16 with its new bootloader, started, switched to download mode from V16, and restored back. V16 no longer needs `--allow-untested`, and the guide now starts from the V16 file M-VAVE offers.
+- Docs: what V16 changes in the flash, and that going back is best done by restoring a backup.
 - Docs: the two flash chips, how to tell which one you have, what differs and why it matters.
 
 ## 1.0.0 (2026-11-03)

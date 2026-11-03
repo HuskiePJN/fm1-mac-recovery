@@ -90,12 +90,12 @@ Put M-VAVE's official firmware in the folder, named `FM-1.fwsc`. The tool checks
 
 | File | Status |
 |---|---|
-| **V15** (`FM-1_015`) | **Tested.** M-VAVE's site no longer offers it, so use a copy you saved earlier. |
+| **V16** (`FM-1_016`) | **Tested.** This is what M-VAVE's [FM-1 page](https://www.m-vave.com/product?id=fm-1) offers now: download `FM-1.fwsc` there. |
+| **V15** (`FM-1_015`) | **Tested.** M-VAVE no longer offers it; use a copy you saved earlier if you prefer it. |
 | **Your own backup** from before the problem | **Best of all**, if you made a full flash backup while the FM-1 still worked (with this tool, M-Flasher or MvaveFM1Unbricker). Skip step 5 and use that backup as the image in step 6. |
-| **V16** (`FM-1_016`) | **Recognised, not yet tested.** This is what M-VAVE's [FM-1 page](https://www.m-vave.com/product?id=fm-1) offers now. It needs `--allow-untested`. |
 
 > [!NOTE]
-> **Firmware note: V16.** V16 brings its own new bootloader, and its firmware is larger, running up to `0xA8FFF`, where V15 keeps its settings. The tool recognises the official V16 file, but nobody has recovered an FM-1 with it yet. If you have V15, recover with V15, then update to V16 the normal way. If you try V16, please [report how it went](https://github.com/HuskiePJN/fm1-mac-recovery/issues/new/choose).
+> **Firmware note: V16.** V16 brings its own new bootloader, and its firmware is larger, running up to `0xA8FFF`, where V15 keeps its settings. On its first start it sets up its own settings further up the flash (`0xC2000`–`0xFBFFF`), over anything custom firmware left there. Like V15, it switches to download mode when the tool asks, so you can always come back with this tool. Going from V16 back down to V15 with M-VAVE's own updater has been reported to scramble the presets; with this tool, restore a full backup instead.
 
 ## Step 3. Put the FM-1 in download mode
 
@@ -153,7 +153,7 @@ Package     FM-1_015, flash.bin 0x93000 bytes: official V15 (tested)
 Image       recovery.bin: package 0x0-0x92FFF, the rest from the backup
 ```
 
-If it says `NOT a known official package`, stop: that file is not M-VAVE's original V15 or V16.
+For V16 the first line reads `Package     FM-1_016, flash.bin 0xA9000 bytes: official V16 (tested)`. If it says `NOT a known official package`, stop: that file is not M-VAVE's original V15 or V16.
 
 ## Step 6. Write it
 
@@ -185,7 +185,7 @@ Unplug the cable, switch the FM-1 off, wait 5 seconds and switch it on without h
 
 ## Afterwards
 
-- **Updating to V16:** once V15 runs, update with M-VAVE's own updater as usual.
+- **Changing between V15 and V16:** M-VAVE's own updater (M-UPGRADE, on M-VAVE's download page for Mac and Windows) updates to V16. To go back, restore a full backup with this tool rather than downgrading with the updater.
 - **Download mode later:** M-VAVE's bootloader has no key for it. While a firmware runs, `backup` and `restore` ask for it by themselves; [M-Flasher](https://github.com/jvitkauskas/m-flasher)'s **Download mode** button does the same.
 - **Odd settings or sounds after custom firmware:** custom data may remain in the settings area. A factory reset in M-VAVE's firmware may fix it. MvaveFM1Unbricker's `repair-settings` handles this on Windows and Linux.
 

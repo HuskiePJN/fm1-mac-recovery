@@ -6,6 +6,9 @@ The FM-1's chip (JieLi AC791N, ROM "WL82 UBOOT1.00") has a download mode in its 
 tool talks to it over USB with libusb, uploads JieLi's flash loader (loader/wl82loader.bin, from
 jl-uboot-tool) into RAM, and reads or writes the 1 MiB flash with it.
 
+  sudo caffeinate -i .venv/bin/python fm1_recover.py install FM-1.fwsc      (backup, image and restore in one go)
+
+or step by step, to look at the image before anything is written:
   sudo .venv/bin/python fm1_recover.py backup
   .venv/bin/python fm1_recover.py image FM-1.fwsc --current backups/BACKUP.bin -o recovery.bin
   sudo caffeinate -i .venv/bin/python fm1_recover.py restore recovery.bin --current backups/BACKUP.bin --allow-boot
@@ -26,7 +29,7 @@ import time
 import zlib
 from pathlib import Path
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 HERE = Path(__file__).resolve().parent
 VID, PID = 0x4C4A, 0x8057       # JieLi ROM download mode
@@ -344,8 +347,8 @@ def connect():
     return f, jedec
 
 
-def cmd_backup():
-    f, _ = connect()
+def take_backup(f):
+    """The whole flash, read twice and compared, saved as backups/fm1-DATE.bin: (data, path)."""
     a = f.read(0, FLASH, "Reading 1/2")
     b = f.read(0, FLASH, "Reading 2/2")
     if a != b:
@@ -353,26 +356,104 @@ def cmd_backup():
     path = HERE / "backups" / ("fm1-%s.bin" % time.strftime("%Y%m%d-%H%M%S"))
     path.parent.mkdir(exist_ok=True)
     path.write_bytes(a)
-    rel = path.relative_to(HERE)
-    print("Backup      %s\n            sha256 %s" % (rel, hashlib.sha256(a).hexdigest()))
-    print("\nKeep a copy of it somewhere safe. Next (step 5):\n  .venv/bin/python fm1_recover.py image FM-1.fwsc --current %s -o recovery.bin" % shlex.quote(str(rel)))
+    print("Backup      %s\n            sha256 %s" % (path.relative_to(HERE), hashlib.sha256(a).hexdigest()))
+    return a, path
+
+
+def write_plan(f, image, current, plan):
+    """Write the planned sectors (firmware first, the boot area last) and verify the whole flash.
+    The flash must still equal `current`; `plan` comes from plan_sectors(current, image)."""
+    boot = [s for s in plan if s < BOOT_END]
+    for i, s in enumerate(plan):
+        if boot and s == boot[0]:
+            # The boot area is the only write that can cost USB recovery: write it only after
+            # everything else reads back exactly, and then without a pause.
+            print()
+            if f.read(BOOT_END, FACTORY - BOOT_END, "Checking firmware") != image[BOOT_END:FACTORY]:
+                sys.exit("Firmware readback differs: boot area NOT written, so download mode still works. "
+                         "Take a new backup, then run restore again.")
+            print("Writing     boot area (4 sectors)")
+        ok = f.write_sector_safe(s, image[s:s + SECTOR])
+        print("\rWrote       0x%05X (%d/%d)" % (s, i + 1, len(plan)), end="" if ok else "\n", flush=True)
+        if not ok:
+            sys.exit("\n0x%05X failed after retries. Do NOT power off: run restore again with a new backup." % s)
+    print()
+    final = f.read(0, FLASH, "Verifying")
+    if final[:FACTORY] != image[:FACTORY] or final[FACTORY:] != current[FACTORY:]:
+        sys.exit("The final readback does not match. Do NOT power off: run restore again.")
+    print("Done: flash matches the image (factory sector unchanged).")
+    print("Unplug USB, switch the FM-1 off, wait 5 s, switch it on.")
+
+
+def cmd_backup():
+    f, _ = connect()
+    _, path = take_backup(f)
+    print("\nKeep a copy of it somewhere safe. Next (step 5):\n  .venv/bin/python fm1_recover.py image FM-1.fwsc --current %s -o recovery.bin" % shlex.quote(str(path.relative_to(HERE))))
+
+
+def check_package(path, allow_untested):
+    """The official package at `path`: (identity, flash.bin, (name, tested, note)); stops if unknown or untested."""
+    try:
+        ident, fl = package_flash(Path(path).read_bytes())
+    except (OSError, ValueError) as e:
+        sys.exit("Stopping: %s" % e)
+    known = recognise(ident, fl)
+    print("Package     %s, flash.bin 0x%X bytes: %s" % (ident, len(fl), "official %s (%s)" % (
+        known[0], "tested" if known[1] else "NOT yet tested") if known else "NOT a known official package"))
+    if not known:
+        sys.exit("Stopping: only M-VAVE's official packages are supported (docs/firmware-and-chips.md).")
+    if not known[1]:
+        print("Note        %s: %s." % (known[0], known[2]))
+        if not allow_untested:
+            sys.exit("Stopping: %s has not been confirmed with this tool yet. Use a tested version, or add "
+                     "--allow-untested to go ahead at your own risk." % known[0])
+    return ident, fl, known
+
+
+def check_chip(jedec, allow_untested):
+    if jedec not in CHIPS and not allow_untested:
+        sys.exit("Stopping, nothing written: this flash chip has not been confirmed with this tool yet. "
+                 "Add --allow-untested to go ahead at your own risk.")
+
+
+def cmd_install(a):
+    """backup, image and restore in one session: one password, one typed word. The word is asked
+    first, because download mode times out while you read; then one connection takes the verified
+    backup, builds the image from it (settings and factory sector kept) and writes what differs."""
+    ident, fl, known = check_package(a.image, a.allow_untested)
+    print("Plan        back up the whole flash, then write M-VAVE's boot area and firmware (0x0-0x%X)" % (len(fl) - 1))
+    print("            where they differ; your settings area and the factory sector are kept.")
+    print("Image       saved next to the backup, for a retry with restore if one is ever needed.")
+    if a.check:
+        print("Check       nothing is written: the plan is shown after the backup.")
+    elif input("Type BOOT to back up and install %s: " % known[0]).strip() != "BOOT":
+        sys.exit("Cancelled, nothing read or written.")
+    f, jedec = connect()
+    check_chip(jedec, a.allow_untested)
+    current, path = take_backup(f)
+    image = build_image(current, fl)
+    out = path.with_name(path.stem + "-install-%s.bin" % known[0])
+    out.write_bytes(image)
+    plan = plan_sectors(current, image)
+    boot = [s for s in plan if s < BOOT_END]
+    print("Image       %s" % out.relative_to(HERE))
+    print("Differs     %d sector(s)%s%s" % (len(plan), ", firmware 0x%05X-0x%05X" % (plan[0], max(s for s in plan if s >= BOOT_END) + SECTOR - 1)
+                                           if any(s >= BOOT_END for s in plan) else "", ", and the boot area" if boot else ""))
+    if not plan:
+        print("Nothing to write: the flash already matches %s." % known[0])
+        return
+    if a.check:
+        print("Check done: nothing written. To install, run the same command without --check, or:\n"
+              "  sudo caffeinate -i .venv/bin/python fm1_recover.py restore %s --current %s%s"
+              % (shlex.quote(str(out.relative_to(HERE))), shlex.quote(str(path.relative_to(HERE))), " --allow-boot" if boot else ""))
+        return
+    write_plan(f, image, current, plan)
 
 
 def cmd_image(a):
+    ident, fl, known = check_package(a.image, a.allow_untested)
     try:
-        ident, fl = package_flash(Path(a.image).read_bytes())
-        current = Path(a.current).read_bytes()
-        known = recognise(ident, fl)
-        print("Package     %s, flash.bin 0x%X bytes: %s" % (ident, len(fl), "official %s (%s)" % (
-            known[0], "tested" if known[1] else "NOT yet tested") if known else "NOT a known official package"))
-        if not known:
-            sys.exit("Stopping: only M-VAVE's official packages are supported (docs/firmware-and-chips.md).")
-        if not known[1]:
-            print("Note        %s: %s." % (known[0], known[2]))
-            if not a.allow_untested:
-                sys.exit("Stopping: %s has not been confirmed with this tool yet. Use a tested version, or add "
-                         "--allow-untested to go ahead at your own risk." % known[0])
-        img = build_image(current, fl, a.keep_boot)
+        img = build_image(Path(a.current).read_bytes(), fl, a.keep_boot)
     except (OSError, ValueError) as e:
         sys.exit("Stopping: %s" % e)
     Path(a.out).write_bytes(img)
@@ -403,36 +484,17 @@ def cmd_restore(a):
     if input("Type %s to erase and write these sectors: " % word).strip() != word:
         sys.exit("Cancelled, nothing written.")
     f, jedec = connect()
-    if jedec not in CHIPS and not a.allow_untested:
-        sys.exit("Stopping, nothing written: this flash chip has not been confirmed with this tool yet. "
-                 "Add --allow-untested to go ahead at your own risk.")
+    check_chip(jedec, a.allow_untested)
     if f.read(0, FLASH, "Checking") != current:
         sys.exit("The flash no longer equals %s: nothing written. Take a new backup first." % a.current)
-    for i, s in enumerate(plan):
-        if boot and s == boot[0]:
-            # The boot area is the only write that can cost USB recovery: write it only after
-            # everything else reads back exactly, and then without a pause.
-            print()
-            if f.read(BOOT_END, FACTORY - BOOT_END, "Checking firmware") != image[BOOT_END:FACTORY]:
-                sys.exit("Firmware readback differs: boot area NOT written, so download mode still works. "
-                         "Take a new backup, then run restore again.")
-            print("Writing     boot area (4 sectors)")
-        ok = f.write_sector_safe(s, image[s:s + SECTOR])
-        print("\rWrote       0x%05X (%d/%d)" % (s, i + 1, len(plan)), end="" if ok else "\n", flush=True)
-        if not ok:
-            sys.exit("\n0x%05X failed after retries. Do NOT power off: run restore again with a new backup." % s)
-    print()
-    final = f.read(0, FLASH, "Verifying")
-    if final[:FACTORY] != image[:FACTORY] or final[FACTORY:] != current[FACTORY:]:
-        sys.exit("The final readback does not match. Do NOT power off: run restore again.")
-    print("Done: flash matches the image (factory sector unchanged).")
-    print("Unplug USB, switch the FM-1 off, wait 5 s, switch it on.")
+    write_plan(f, image, current, plan)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=("backup", "image", "restore", "probe"))
-    ap.add_argument("image", nargs="?", help="image: the .fwsc package; restore: the 1 MiB image")
+    ap.add_argument("command", choices=("install", "backup", "image", "restore", "probe"))
+    ap.add_argument("image", nargs="?", help="install, image: the .fwsc package; restore: the 1 MiB image")
+    ap.add_argument("--check", action="store_true", help="install: back up and show the plan, write nothing")
     ap.add_argument("--current", help="a backup of the FM-1 as it is now (made by backup)")
     ap.add_argument("-o", "--out", help="image: where to save the 1 MiB image")
     ap.add_argument("--keep-boot", action="store_true", help="image: keep the boot area from the backup")
@@ -447,6 +509,10 @@ def main():
         return cmd_image(a)
     if os.geteuid() != 0:
         sys.exit("Run this with sudo (it needs to take the FM-1 over from macOS).")
+    if a.command == "install":
+        if not a.image:
+            sys.exit("install needs: FM-1.fwsc")
+        return cmd_install(a)
     if a.command == "restore":
         if not (a.image and a.current):
             sys.exit("restore needs: IMAGE.bin --current BACKUP.bin")

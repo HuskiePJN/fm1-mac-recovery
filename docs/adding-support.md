@@ -32,4 +32,4 @@ Check before adding:
 
 - Bump `__version__` in `fm1_recover.py`, add a changelog entry, and tag `vX.Y.Z`.
 - The offline tests run on every push (`.github/workflows/tests.yml`). They need no FM-1.
-- A change to how the tool reads or writes needs a real check on an FM-1 before release: a backup, then a one-sector write and restore on an empty sector outside the firmware, the method used for 1.0.0 (see [firmware-and-chips.md](firmware-and-chips.md)).
+- A change to how the tool reads or writes needs a real check on an FM-1 before release: a backup, then a one-sector write and restore on an empty sector outside the firmware, the method used for 1.0.0, and `install PKG --check` for the one-connection path (see [firmware-and-chips.md](firmware-and-chips.md)).

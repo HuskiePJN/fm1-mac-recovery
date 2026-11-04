@@ -77,3 +77,4 @@ If you plan to install custom firmware afterwards on a UC25HQ80, check that its 
 |---|---|---|
 | 1.0.0 | UC25HQ80 | Backup (two reads, identical); a one-sector write and verify outside the firmware, then back; a restore correctly refused when the running firmware had saved between runs |
 | 1.1.0 | UC25HQ80 | V16 written with its boot area and started; `probe` from V16; a full restore of an earlier backup, boot area included |
+| 1.2.0 | UC25HQ80 | `install FM-1.fwsc --check` (V16): backup, image and plan from one connection, the image byte for byte the same as `image` makes; the write path is `restore`'s, checked in 1.0.0 and 1.1.0 |

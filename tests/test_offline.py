@@ -126,6 +126,30 @@ class Plan(unittest.TestCase):
         self.assertFalse(r.same_unit(flash(0), flash(0, factory=b"X")))
 
 
+class Install(unittest.TestCase):
+    """install = backup + image + restore in one go: the same image and plan as the three steps."""
+
+    def test_same_as_the_three_steps(self):
+        fl = bytes(range(256)) * 0x930
+        ident, out = r.package_flash(make_package("FM-1_015", fl))
+        current = flash(0x33)
+        image = r.build_image(current, out)
+        plan = r.plan_sectors(current, image)
+        self.assertEqual(image, r.build_image(current, fl))
+        self.assertEqual(plan[-4:], [0x0000, 0x1000, 0x2000, 0x3000])     # the boot area last
+        self.assertTrue(all(s < 0x93000 for s in plan))                     # nothing after flash.bin
+        self.assertTrue(r.same_unit(current, image))
+
+    def test_parser_accepts_install(self):
+        import argparse
+        ap = argparse.ArgumentParser()
+        ap.add_argument("command", choices=("install", "backup", "image", "restore", "probe"))
+        ap.add_argument("image", nargs="?")
+        ap.add_argument("--check", action="store_true")
+        a = ap.parse_args(["install", "FM-1.fwsc", "--check"])
+        self.assertEqual((a.command, a.image, a.check), ("install", "FM-1.fwsc", True))
+
+
 class Known(unittest.TestCase):
     def test_tables(self):
         for ident, (name, end, sha, tested, note) in r.FIRMWARE.items():

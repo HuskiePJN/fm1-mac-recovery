@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-11-04)
+
+- **`install FM-1.fwsc`**: backup, image and restore in one command, with one password and one typed `BOOT`. It saves the backup and the image, so a retry is a plain `restore`. `--check` does everything but the write.
+- The guide is four steps shorter; the three separate commands stay as "Step by step instead".
+
 ## 1.1.0 (2026-11-03)
 
 - **V16 is tested.** An FM-1 was taken to V16 with its new bootloader, started, switched to download mode from V16, and restored back. V16 no longer needs `--allow-untested`, and the guide now starts from the V16 file M-VAVE offers.

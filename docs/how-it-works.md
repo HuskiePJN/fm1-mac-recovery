@@ -37,7 +37,7 @@ An M-VAVE package starts with 20 blocks of 48 bytes. The 48th byte of each block
 
 ## The safety design
 
-- **Offline first.** `image` and the plan in `restore` need no device. The typed confirmation comes before the tool takes the FM-1, so the unit never waits in download mode while you read.
+- **Offline first.** `image` and the plan in `restore` need no device. The typed confirmation comes before the tool takes the FM-1, so the unit never waits in download mode while you read. `install` asks for it before it connects for the same reason, then takes the backup, builds the image and writes in one connection; it saves both files, so a retry is a plain `restore`.
 - **The flash must still equal your backup.** `restore` reads the whole flash before writing. If it changed, it stops without writing.
 - **The same unit.** An image whose factory sector differs from the backup's is refused.
 - **The boot area last.** Before the first boot sector, the tool reads back the whole firmware area. If anything differs, it stops with the old bootloader intact, so download mode still works. The four boot sectors are then written without a pause.
@@ -48,6 +48,7 @@ An M-VAVE package starts with 20 blocks of 48 bytes. The 48th byte of each block
 
 | Command | Device | Writes |
 |---|---|---|
+| `install PKG [--check]` | yes | the backup and the image on the Mac, then the sectors that differ (nothing with `--check`) |
 | `probe` | yes | nothing |
 | `backup` | yes | `backups/fm1-DATE.bin` on the Mac |
 | `image PKG --current BACKUP -o OUT` | no | `OUT` on the Mac |

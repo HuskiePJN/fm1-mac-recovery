@@ -29,7 +29,7 @@ import time
 import zlib
 from pathlib import Path
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 HERE = Path(__file__).resolve().parent
 VID, PID = 0x4C4A, 0x8057       # JieLi ROM download mode
@@ -144,17 +144,44 @@ def addr_len_crc(addr, data):
 
 
 # ---- The device.
+LIBUSB = ("/opt/homebrew/lib/libusb-1.0.dylib",      # Homebrew, Apple silicon
+          "/usr/local/lib/libusb-1.0.dylib",         # Homebrew, Intel
+          "/opt/local/lib/libusb-1.0.dylib")         # MacPorts
+
+
+def usb_module():
+    """pyusb, from the tool's own .venv (a plain `sudo python3 …` has no `usb`)."""
+    try:
+        import usb.core
+        import usb.util
+        import usb.backend.libusb1
+    except ImportError:
+        sys.exit("pyusb is missing: run the command with .venv/bin/python, after sh setup.sh (step 1).")
+    return usb
+
+
 def backend():
-    import usb.backend.libusb1 as libusb1
-    libs = [p for p in ("/opt/homebrew/lib/libusb-1.0.dylib", "/usr/local/lib/libusb-1.0.dylib") if Path(p).exists()]
-    return libusb1.get_backend(find_library=lambda name: libs[0] if libs else None)
+    libusb1 = usb_module().backend.libusb1
+    libs = [p for p in LIBUSB if Path(p).exists()]
+    be = libusb1.get_backend(find_library=(lambda name: libs[0]) if libs else None)
+    if be is None:
+        sys.exit("libusb was not found (it talks to the FM-1 over USB). Run sh setup.sh, or: brew install libusb")
+    return be
+
+
+def give_to_user(path):
+    """A file written under sudo belongs to the user who ran the command, not to root."""
+    uid, gid = os.environ.get("SUDO_UID"), os.environ.get("SUDO_GID")
+    if uid and gid:
+        try:
+            os.chown(path, int(uid), int(gid))
+        except OSError:
+            pass
 
 
 class Fm1:
     def __init__(self, wait=0):
-        import usb.core
-        import usb.util
-        self.usb = usb
+        usb = self.usb = usb_module()
         be = backend()
         deadline = time.monotonic() + wait
         while (dev := usb.core.find(idVendor=VID, idProduct=PID, backend=be)) is None and time.monotonic() < deadline:
@@ -170,15 +197,18 @@ class Fm1:
             usb.util.claim_interface(self.dev, self.iface)
         except usb.core.USBError:
             # macOS's disk driver holds it: root can take the device over (as M-Flasher does)
-            self.dev.detach_kernel_driver(self.iface)
-            for _ in range(10):
-                time.sleep(0.1)
-                try:
-                    usb.util.claim_interface(self.dev, self.iface)
-                    break
-                except usb.core.USBError:
-                    pass
-            else:
+            try:
+                self.dev.detach_kernel_driver(self.iface)
+                for _ in range(10):
+                    time.sleep(0.1)
+                    try:
+                        usb.util.claim_interface(self.dev, self.iface)
+                        break
+                    except usb.core.USBError:
+                        pass
+                else:
+                    raise usb.core.USBError("still held")
+            except usb.core.USBError:
                 sys.exit("macOS did not release the FM-1. Run the command with sudo from Terminal, and allow "
                          "access to removable volumes if macOS asks.")
         self.tag = 0
@@ -263,17 +293,18 @@ class Fm1:
             part = data[off:off + step]
             if any(b != 0xFF for b in part):
                 self.execute(cdb(0xFB04, addr_len_crc(addr + off, part)), out=part)
-        return zlib.crc32(self.read(addr, SECTOR)) == zlib.crc32(data)
+        return self.read(addr, SECTOR) == data
 
     def reconnect(self):
         """After the FM-1 dropped off USB: wait for it, take it again, restart the loader."""
         self.usb.util.dispose_resources(self.dev)
+        print("Waiting     for the FM-1 to come back on USB (up to 30 s)")
         try:
             self.__init__(wait=30)
-        except SystemExit:
+            self.start_loader()
+        except (SystemExit, self.usb.core.USBError, IOError):
             sys.exit("The FM-1 did not come back on USB. Leave it switched on and connected, put it in "
-                     "download mode again, then run backup and restore again.")
-        self.start_loader()
+                     "download mode again, then run install (or backup and restore) again.")
 
     def write_sector_safe(self, addr, data):
         """write_sector with retries (an erase and program can safely be repeated)."""
@@ -281,9 +312,9 @@ class Fm1:
             try:
                 if self.write_sector(addr, data):
                     return True
-                print("            0x%05X did not verify, writing again" % addr)
+                print("\n            0x%05X did not verify, writing again" % addr)
             except (self.usb.core.USBError, IOError) as e:
-                print("            0x%05X attempt %d: %s" % (addr, attempt + 1, e))
+                print("\n            0x%05X attempt %d: %s" % (addr, attempt + 1, e))
                 time.sleep(0.25 * (attempt + 1))
                 if getattr(e, "errno", None) == 19:     # gone from USB
                     self.reconnect()
@@ -303,14 +334,21 @@ def enter_download_mode():
     try:    # without Apple's command line tools, /usr/bin/swift only offers to install them
         if subprocess.run(["xcode-select", "-p"], capture_output=True).returncode:
             return False
-        return subprocess.run((["sudo", "-u", user] if user else []) + cmd, capture_output=True, text=True).returncode == 0
-    except OSError:
+        r = subprocess.run((["sudo", "-u", user] if user else []) + cmd, capture_output=True, text=True, timeout=60)
+        if r.returncode and r.stderr.strip() and not enter_download_mode.told:
+            enter_download_mode.told = True
+            print("Note        the download-mode request could not be sent: %s" % r.stderr.strip().splitlines()[-1])
+        return r.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
         return False
+
+
+enter_download_mode.told = False
 
 
 def wait_download_mode(timeout=60):
     """Wait until the FM-1 is in download mode and stays there for 1 s. While a firmware runs, ask it to switch."""
-    import usb.core
+    usb = usb_module()
     be, deadline, asked, seen, told = backend(), time.monotonic() + timeout, 0.0, None, False
     while time.monotonic() < deadline:
         if usb.core.find(idVendor=VID, idProduct=PID, backend=be) is not None:
@@ -354,8 +392,11 @@ def take_backup(f):
     if a != b:
         sys.exit("The two reads differ: flash reads are not reliable. Stopping, nothing saved.")
     path = HERE / "backups" / ("fm1-%s.bin" % time.strftime("%Y%m%d-%H%M%S"))
-    path.parent.mkdir(exist_ok=True)
+    if not path.parent.is_dir():
+        path.parent.mkdir()
+        give_to_user(path.parent)
     path.write_bytes(a)
+    give_to_user(path)
     print("Backup      %s\n            sha256 %s" % (path.relative_to(HERE), hashlib.sha256(a).hexdigest()))
     return a, path
 
@@ -372,7 +413,7 @@ def write_plan(f, image, current, plan):
             if f.read(BOOT_END, FACTORY - BOOT_END, "Checking firmware") != image[BOOT_END:FACTORY]:
                 sys.exit("Firmware readback differs: boot area NOT written, so download mode still works. "
                          "Take a new backup, then run restore again.")
-            print("Writing     boot area (4 sectors)")
+            print("Writing     boot area (%d sectors)" % len(boot))
         ok = f.write_sector_safe(s, image[s:s + SECTOR])
         print("\rWrote       0x%05X (%d/%d)" % (s, i + 1, len(plan)), end="" if ok else "\n", flush=True)
         if not ok:
@@ -388,7 +429,7 @@ def write_plan(f, image, current, plan):
 def cmd_backup():
     f, _ = connect()
     _, path = take_backup(f)
-    print("\nKeep a copy of it somewhere safe. Next (step 5):\n  .venv/bin/python fm1_recover.py image FM-1.fwsc --current %s -o recovery.bin" % shlex.quote(str(path.relative_to(HERE))))
+    print("\nKeep a copy of it somewhere safe. Next, the image (step by step in the guide):\n  .venv/bin/python fm1_recover.py image FM-1.fwsc --current %s -o recovery.bin" % shlex.quote(str(path.relative_to(HERE))))
 
 
 def check_package(path, allow_untested):
@@ -429,11 +470,13 @@ def cmd_install(a):
     elif input("Type BOOT to back up and install %s: " % known[0]).strip() != "BOOT":
         sys.exit("Cancelled, nothing read or written.")
     f, jedec = connect()
-    check_chip(jedec, a.allow_untested)
+    if not a.check:
+        check_chip(jedec, a.allow_untested)
     current, path = take_backup(f)
     image = build_image(current, fl)
     out = path.with_name(path.stem + "-install-%s.bin" % known[0])
     out.write_bytes(image)
+    give_to_user(out)
     plan = plan_sectors(current, image)
     boot = [s for s in plan if s < BOOT_END]
     print("Image       %s" % out.relative_to(HERE))
@@ -444,8 +487,9 @@ def cmd_install(a):
         return
     if a.check:
         print("Check done: nothing written. To install, run the same command without --check, or:\n"
-              "  sudo caffeinate -i .venv/bin/python fm1_recover.py restore %s --current %s%s"
-              % (shlex.quote(str(out.relative_to(HERE))), shlex.quote(str(path.relative_to(HERE))), " --allow-boot" if boot else ""))
+              "  sudo caffeinate -i .venv/bin/python fm1_recover.py restore %s --current %s%s%s"
+              % (shlex.quote(str(out.relative_to(HERE))), shlex.quote(str(path.relative_to(HERE))),
+                 " --allow-boot" if boot else "", " --allow-untested" if a.allow_untested else ""))
         return
     write_plan(f, image, current, plan)
 
@@ -456,9 +500,12 @@ def cmd_image(a):
         img = build_image(Path(a.current).read_bytes(), fl, a.keep_boot)
     except (OSError, ValueError) as e:
         sys.exit("Stopping: %s" % e)
-    Path(a.out).write_bytes(img)
+    try:
+        Path(a.out).write_bytes(img)
+    except OSError as e:
+        sys.exit("Stopping: %s" % e)
     print("Image       %s: package 0x%X-0x%X, the rest from the backup" % (a.out, BOOT_END if a.keep_boot else 0, len(fl) - 1))
-    print("\nNext (step 6):\n  sudo caffeinate -i .venv/bin/python fm1_recover.py restore %s --current %s --allow-boot%s"
+    print("\nNext, the write:\n  sudo caffeinate -i .venv/bin/python fm1_recover.py restore %s --current %s --allow-boot%s"
           % (shlex.quote(a.out), shlex.quote(a.current), " --allow-untested" if not known[1] else ""))
 
 
@@ -466,12 +513,15 @@ def cmd_restore(a):
     """Plan and confirm against a backup of the FM-1 as it is now, then connect, check the flash still
     equals that backup, and write at once. Firmware first, boot area last: until the boot sectors, the
     installed bootloader stays intact, so download mode keeps working if anything goes wrong."""
-    image, current = Path(a.image).read_bytes(), Path(a.current).read_bytes()
+    try:
+        image, current = Path(a.image).read_bytes(), Path(a.current).read_bytes()
+    except OSError as e:
+        sys.exit("Stopping: %s" % e)
     if len(image) != FLASH or len(current) != FLASH:
         sys.exit("The image and the backup must both be exactly 1 MiB.")
     if not same_unit(current, image):
         sys.exit("Stopping: the image's factory sector differs from your backup's, so it looks like it comes "
-                 "from another FM-1. Build the image from your own backup (step 5).")
+                 "from another FM-1. Build the image from your own backup.")
     plan = plan_sectors(current, image)
     boot = [s for s in plan if s < BOOT_END]
     print("Differs     %d sector(s): %s" % (len(plan), " ".join("%05X" % s for s in plan) or "none"))
@@ -490,7 +540,7 @@ def cmd_restore(a):
     write_plan(f, image, current, plan)
 
 
-def main():
+def build_parser():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=("install", "backup", "image", "restore", "probe"))
     ap.add_argument("image", nargs="?", help="install, image: the .fwsc package; restore: the 1 MiB image")
@@ -502,7 +552,21 @@ def main():
     ap.add_argument("--allow-untested", action="store_true", help="go ahead with firmware or a flash chip not yet confirmed")
     ap.add_argument("--jieli", action="store_true", help=argparse.SUPPRESS)    # (the default; kept for old commands)
     ap.add_argument("--version", action="version", version="fm1_recover " + __version__)
-    a = ap.parse_args()
+    return ap
+
+
+def main():
+    a = build_parser().parse_args()
+    try:
+        run(a)
+    except (KeyboardInterrupt, EOFError):
+        sys.exit("\nStopped. If a write was in progress, leave the FM-1 on and connected and run the command again.")
+    except IOError as e:       # (pyusb's USBError is an IOError) a USB drop or timeout outside the retried writes
+        sys.exit("\nUSB error: %s\nLeave the FM-1 switched on and connected, put it in download mode again (step 3) "
+                 "and run the command again; install takes a new backup by itself." % e)
+
+
+def run(a):
     if a.command == "image":
         if not (a.image and a.current and a.out):
             sys.exit("image needs: FM-1.fwsc --current BACKUP.bin -o recovery.bin")

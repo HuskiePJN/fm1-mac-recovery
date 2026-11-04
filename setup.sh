@@ -10,13 +10,19 @@ if ! xcode-select -p >/dev/null 2>&1; then
     echo "  xcode-select --install"
     exit 1
 fi
-if [ ! -f /opt/homebrew/lib/libusb-1.0.dylib ] && [ ! -f /usr/local/lib/libusb-1.0.dylib ]; then
-    if ! command -v brew >/dev/null 2>&1; then
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 8))' 2>/dev/null; then
+    echo "Python 3.8 or newer is needed (yours: $(python3 --version 2>&1)). Update Apple's command line tools:"
+    echo "  softwareupdate --list    then install the Command Line Tools update it shows"
+    exit 1
+fi
+if [ ! -f /opt/homebrew/lib/libusb-1.0.dylib ] && [ ! -f /usr/local/lib/libusb-1.0.dylib ] && [ ! -f /opt/local/lib/libusb-1.0.dylib ]; then
+    BREW=$(command -v brew 2>/dev/null || ls /opt/homebrew/bin/brew /usr/local/bin/brew 2>/dev/null | head -1)
+    if [ -z "$BREW" ]; then
         echo "libusb is needed, and Homebrew installs it. Install Homebrew from https://brew.sh, then run sh setup.sh again."
         exit 1
     fi
     echo "Installing libusb with Homebrew..."
-    brew install libusb
+    "$BREW" install libusb
 fi
 [ -x .venv/bin/python ] || python3 -m venv .venv
 .venv/bin/python -m pip install --quiet --disable-pip-version-check -r requirements.txt
@@ -30,5 +36,5 @@ if [ ! -f loader/wl82loader.bin ] || [ "$(shasum -a 256 loader/wl82loader.bin | 
         exit 1
     fi
 fi
-echo "Setup done. Next: put the FM-1 in download mode (step 3), then:"
-echo "  sudo .venv/bin/python fm1_recover.py backup"
+echo "Setup done. Next: put FM-1.fwsc in this folder (step 2) and the FM-1 in download mode (step 3), then:"
+echo "  sudo caffeinate -i .venv/bin/python fm1_recover.py install FM-1.fwsc"

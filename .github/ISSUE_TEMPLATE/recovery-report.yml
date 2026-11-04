@@ -20,7 +20,7 @@ body:
   - type: input
     id: package
     attributes:
-      label: The "Package" line from step 5
+      label: The "Package" line from step 4
       placeholder: "Package     FM-1_015, flash.bin 0x93000 bytes: official V15 (tested)"
   - type: input
     id: before

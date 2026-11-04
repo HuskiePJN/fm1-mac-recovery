@@ -14,6 +14,6 @@ jobs:
       - name: Syntax of the Python and Swift files
         run: |
           python3 -m py_compile fm1_recover.py
-          swiftc -parse dlmode.swift
+          swiftc -typecheck dlmode.swift
       - name: Setup script
         run: sh -n setup.sh

@@ -141,13 +141,10 @@ class Install(unittest.TestCase):
         self.assertTrue(r.same_unit(current, image))
 
     def test_parser_accepts_install(self):
-        import argparse
-        ap = argparse.ArgumentParser()
-        ap.add_argument("command", choices=("install", "backup", "image", "restore", "probe"))
-        ap.add_argument("image", nargs="?")
-        ap.add_argument("--check", action="store_true")
-        a = ap.parse_args(["install", "FM-1.fwsc", "--check"])
-        self.assertEqual((a.command, a.image, a.check), ("install", "FM-1.fwsc", True))
+        a = r.build_parser().parse_args(["install", "FM-1.fwsc", "--check", "--allow-untested"])
+        self.assertEqual((a.command, a.image, a.check, a.allow_untested), ("install", "FM-1.fwsc", True, True))
+        a = r.build_parser().parse_args(["restore", "x.bin", "--current", "y.bin", "--allow-boot"])
+        self.assertEqual((a.command, a.current, a.allow_boot), ("restore", "y.bin", True))
 
 
 class Known(unittest.TestCase):

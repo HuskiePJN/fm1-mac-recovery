@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.1 (2026-11-04)
+
+A review pass before wider use; nothing changes in what is written to the flash.
+
+- Backups and images made under `sudo` now belong to you, not to root, so you can move or delete them.
+- Clear messages instead of tracebacks: a missing libusb or pyusb, a mistyped file name, a USB drop during a read, Ctrl-C, macOS not releasing the FM-1.
+- MacPorts' libusb is found; `setup.sh` finds Homebrew right after it is installed and checks the Python version; pyusb is pinned by range (1.2.1 or newer) for Python 3.8.
+- `install --check` prints a complete `restore` command; step numbers in messages match the guide.
+- Docs: the two chips' command sets and timings from their datasheets; the README says what a V15-over-V16 install leaves behind.
+
 ## 1.2.0 (2026-11-04)
 
 - **`install FM-1.fwsc`**: backup, image and restore in one command, with one password and one typed `BOOT`. It saves the backup and the image, so a retry is a plain `restore`. `--check` does everything but the write.

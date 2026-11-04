@@ -27,7 +27,7 @@ This fits if all of these are true:
 
 - Your FM-1 stays on a black screen, or no longer starts properly, often after installing other firmware or a bootloader.
 - The Mac can see it in **download mode**, a USB disk named `UBOOT1.00`. [Step 3](#step-3-put-the-fm-1-in-download-mode) shows how to get there and how to check.
-- You have a Mac with macOS. It was tested on an Apple silicon Mac. Intel Macs should work but have not been tested.
+- You have a Mac with macOS 12 or newer (Python 3.8 or newer from Apple's command line tools). It was tested on an Apple silicon Mac; Intel Macs should work but have not been tested. Homebrew or MacPorts for libusb.
 
 Not the right guide?
 
@@ -40,8 +40,8 @@ How it works, in short: the FM-1's chip (JieLi AC791N) has a rescue mode built i
 
 - **It backs up first.** Every write starts from a backup that was read twice and compared. Nothing is written if the flash changed since.
 - **Factory data stays.** The last 4 KB of the flash holds your unit's own factory data. The tool never erases or writes it, and it refuses an image from another FM-1.
-- **Boot area last.** The bootloader is written last, only with `--allow-boot` and a typed `BOOT`, and only after everything else reads back correctly.
-- **Nothing unconfirmed by default.** Firmware versions or flash chips nobody has confirmed yet need `--allow-untested`.
+- **Boot area last.** The bootloader is written last, only after a typed `BOOT` (and, for `restore`, `--allow-boot`), and only after everything else reads back correctly.
+- **Nothing unconfirmed by default.** Firmware versions not yet confirmed, and flash chips not in the tool's table, need `--allow-untested`.
 
 > [!WARNING]
 > **The one risky moment.** Writing the boot area takes under a second. If the cable comes out or power fails right then, the USB rescue mode may stop working, and the chip then needs special hardware. Plug the FM-1 **straight into the Mac** (no hub or dock), keep the Mac on its charger, and don't touch the cable or the FM-1 while it writes.
@@ -141,6 +141,7 @@ Chip key    0x980F   flash 0xB36014 (UCUN UC25HQ80, tested)
 Reading 1/2 100%
 Reading 2/2 100%
 Backup      backups/fm1-YYYYMMDD-HHMMSS.bin
+            sha256 …
 Image       backups/fm1-YYYYMMDD-HHMMSS-install-V16.bin
 Differs     169 sector(s), firmware 0x04000-0xA8FFF, and the boot area
 Wrote       0xA8000 (165/169)
@@ -154,7 +155,7 @@ Unplug USB, switch the FM-1 off, wait 5 s, switch it on.
 
 If it says `NOT a known official package`, that file is not M-VAVE's original V15 or V16. Afterwards, copy the `backups` folder somewhere safe, such as an external drive.
 
-Want to see the plan before anything is written? Add `--check`: it backs up, builds the image and shows what differs, then stops. Short USB hiccups are retried by themselves; if the FM-1 drops off USB, the tool waits for it, reconnects and writes that part again. `caffeinate` keeps the Mac awake.
+Want to see the plan before anything is written? Add `--check`: it backs up, builds the image and shows what differs, then stops. Short USB hiccups during the write are retried by themselves; if the FM-1 drops off USB, the tool waits for it, reconnects and writes that part again. A drop during a read stops with `USB error`; run the command again. `caffeinate` keeps the Mac awake, but keep the lid open.
 
 > [!NOTE]
 > **Flash chip note.** FM-1s use one of two 1 MB flash chips: `0x856014` (Puya P25Q80H) or `0xB36014` (UCUN UC25HQ80, in the 2026 units with the logo on the front). The UC25HQ80 was recovered with this tool; the Puya is read by the same loader and expected to work. The tool uses JieLi's own loader because, on a UC25HQ80 after m-bootloader, M-Flasher's loader read only blank data. Any other chip key or flash size stops the tool before it touches anything. Why the chip matters for custom firmware and other tools: [Firmware and chips](docs/firmware-and-chips.md#why-it-matters).
@@ -186,7 +187,7 @@ sudo caffeinate -i .venv/bin/python fm1_recover.py restore recovery.bin --curren
 
 ## Afterwards
 
-- **Changing between V15 and V16:** M-VAVE's own updater (M-UPGRADE, on M-VAVE's download page for Mac and Windows) updates to V16. To go back, restore a full backup with this tool rather than downgrading with the updater.
+- **Changing between V15 and V16:** M-VAVE's own updater (M-UPGRADE, on M-VAVE's download page for Mac and Windows) updates to V16. Going back to V15, with the updater or with `install` over a V16 unit, leaves V16 data where V15 keeps its settings, and presets can come out scrambled: do a factory reset in V15 afterwards, or better, restore a full backup from before V16 with this tool.
 - **Download mode later:** M-VAVE's bootloader has no key for it. While a firmware runs, `install`, `backup` and `restore` ask for it by themselves; [M-Flasher](https://github.com/jvitkauskas/m-flasher)'s **Download mode** button does the same.
 - **Odd settings or sounds after custom firmware:** custom data may remain in the settings area. A factory reset in M-VAVE's firmware may fix it. MvaveFM1Unbricker's `repair-settings` handles this on Windows and Linux.
 
@@ -205,7 +206,10 @@ sudo caffeinate -i .venv/bin/python fm1_recover.py restore recovery.bin --curren
 | `looks like it comes from another FM-1` | The image's factory sector isn't yours. Build the image from your own backup. |
 | `the flash no longer equals …` | Nothing was written. Run `install` again (or take a new backup and use it in `image` and `restore`). |
 | `Firmware readback differs: boot area NOT written` | Your bootloader wasn't touched, so download mode still works. Repeat steps 3 and 4. |
-| `Do NOT power off` | Leave the FM-1 on and connected. Run `install` again, or `restore` with the image and backup it saved. |
+| `Do NOT power off` | Leave the FM-1 on and connected. Run `install` again (it takes a new backup first), or `backup` and then `restore` the saved image with that new backup. |
+| `USB error: …` | The USB link dropped or timed out outside a write. Leave the FM-1 on and connected, put it in download mode again (step 3) and run the command again. |
+| `pyusb is missing` | The command was run with the Mac's own `python3`. Use `.venv/bin/python` as in the guide, after `sh setup.sh`. |
+| `libusb was not found` | Run `sh setup.sh` again (it installs libusb with Homebrew), or `brew install libusb`. |
 | `Unexpected chip key or flash size` | Not a chip the tool knows. It stopped before touching anything. Please [open an issue](https://github.com/HuskiePJN/fm1-mac-recovery/issues/new/choose) with the line it printed. |
 
 ## More

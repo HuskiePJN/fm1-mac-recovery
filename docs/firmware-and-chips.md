@@ -42,6 +42,19 @@ They are interchangeable 8 Mbit (1 MiB) SPI flash chips: same memory type, same 
 
 M-VAVE's own firmware (V15 and V16) runs and saves its settings on both.
 
+Checked against the manufacturers' datasheets (UCUN UC25HQ80 v1.2, January 2022; Puya P25Q80H v1.7), everything the loader uses is the same on both:
+
+| | Puya P25Q80H | UCUN UC25HQ80 |
+|---|---|---|
+| Read ID (`9Fh`) | `85 60 14` | `B3 60 14` |
+| Write enable, sector erase, page program, read | `06h`, `20h` (4 KB), `02h` (256-byte page), `03h` | the same |
+| Status register bits | `SRP0 BP4-BP0 WEL WIP`, `SUS1 CMP LB3-LB1 SUS2 QE SRP1` | the same |
+| Sector erase time, typical / max | 8 / 20 ms | 7 / 10 ms |
+| Page program time, typical / max | 2 / 3 ms | 1.5 / 3 ms |
+| Endurance | 100,000 program/erase cycles | 100,000 |
+
+The tool never erases more than one 4 KB sector at a time (no block or chip erase), never changes the status register, and waits on each command with a 10 s USB timeout, far above either chip's slowest erase. A sector whose block-protect bits were set would fail its readback check and be reported, not silently skipped.
+
 ### Why it matters
 
 Some FM-1 software was written when only the Puya chip was known. It checks the ID, and on a UC25HQ80 it either refuses or behaves differently. At the time of writing (November 2026):
@@ -78,3 +91,4 @@ If you plan to install custom firmware afterwards on a UC25HQ80, check that its 
 | 1.0.0 | UC25HQ80 | Backup (two reads, identical); a one-sector write and verify outside the firmware, then back; a restore correctly refused when the running firmware had saved between runs |
 | 1.1.0 | UC25HQ80 | V16 written with its boot area and started; `probe` from V16; a full restore of an earlier backup, boot area included |
 | 1.2.0 | UC25HQ80 | `install FM-1.fwsc --check` (V16): backup, image and plan from one connection, the image byte for byte the same as `image` makes; the write path is `restore`'s, checked in 1.0.0 and 1.1.0 |
+| 1.2.1 | UC25HQ80 | `install --check` again after the review pass: same plan; backup and image owned by the user who ran sudo |

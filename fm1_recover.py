@@ -29,7 +29,7 @@ import time
 import zlib
 from pathlib import Path
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 HERE = Path(__file__).resolve().parent
 VID, PID = 0x4C4A, 0x8057       # JieLi ROM download mode

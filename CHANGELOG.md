@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2 (2026-11-04)
+
+- The switch to download mode also finds a firmware that renamed its USB port, as long as the name has `FM-1` in it (for example "My FM-1"). Before, the name had to start with `FM-1` or `Felucca`.
+
 ## 1.2.1 (2026-11-04)
 
 A review pass before wider use; nothing changes in what is written to the flash.
